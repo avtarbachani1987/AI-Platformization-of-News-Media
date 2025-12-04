@@ -1,0 +1,429 @@
+# R Code for the study
+
+setwd("")
+
+
+# calling necessary packages
+#install all packages if not done already 
+#use install.packages("") for installing packages
+library(psych)
+library(dplyr)
+library(modelsummary)
+library(EFA.dimensions)
+library(readr)
+library(REdaS)
+library(lavaan)
+library(EFAtools)
+library(tidyverse)
+library(semPlot)
+library(lavaangui)
+library(rempsyc)
+library(pandoc)
+library(gt)
+library(flextable)
+library(officer)
+library(webshot2)
+
+# summarizing demographic data
+demographic <- read.csv("Demographics Nov 19.csv")
+View(demographic)
+demo_data<- modelsummary::datasummary_skim(demographic)
+save_as_docx(demo_data, path="demodata.docx")
+
+
+#reliability testing for individual sub-scales
+
+
+data <- read.csv("nov13.csv")
+aa <- data[, 1:13]
+aa_alpha<- psych::alpha(aa, keys=NULL, check.keys=TRUE)
+
+
+ase <- data[, 14:35]
+ase_alpha <- psych::alpha(ase, check.keys=TRUE)
+
+
+#combining these in a clean format
+
+aa_reliability <- data.frame(Measure=c("Cronbach Alpha", "Avg. Inter-Item Correlation", "Standardized Alpha"),
+                             Value=c(aa_alpha$total$raw_alpha, aa_alpha$total$average_r, aa_alpha$total$std.alpha))
+
+print(aa_reliability)
+
+ase_reliability <- data.frame(Measure=c("Cronbach Alpha", "Avg. Inter-Item Correlation", "Standardized Alpha"),
+                              Value=c(ase_alpha$total$raw_alpha, ase_alpha$total$average_r, ase_alpha$total$std.alpha))
+
+aai <- data[,36:47]
+aai_alpha <- psych::alpha(aai, check.keys=TRUE)
+
+aai_reliability <- data.frame(Measure=c("Cronbach Alpha", "Avg. Inter-Item Correlation", "Standardized Alpha"),
+                              Value=c(aai_alpha$total$raw_alpha, aai_alpha$total$average_r, aai_alpha$total$std.alpha))
+
+itu <- data[, 48:59]
+itu_alpha <- psych::alpha(itu, check.keys=TRUE)
+itu_reliability <- data.frame(Measure=c("Cronbach Alpha", "Avg. Inter-Item Correlation", "Standardized Alpha"),
+                              Value=c(itu_alpha$total$raw_alpha, itu_alpha$total$average_r, itu_alpha$total$std.alpha))
+
+
+
+#creating a combined table for reliability measures
+
+combined_rel <- data.frame(
+  Item=c("Algorithmic Awareness", "AI Self Efficacy", "Attitude Toward AI", "Intention to Use"),
+  Cronbach_Alpha= c(0.7984137, 0.8839614, 0.8117523, 0.8773436),
+  Avg_Inter_Item_Correlation=c(0.2494878, 0.2619435, 0.2645416,0.3703639),
+  Standardized_Alpha=c(0.8120832, 0.8864671, 0.8119012,0.8759094)
+)
+
+
+
+#Presenting in a publication format, using GT table : title, formatting, 
+
+rel_table <- combined_rel |>
+  gt() |>
+  tab_header(
+    title= "Summary of Reliability Scores",
+    subtitle= "Sub-Scales"
+  ) |>
+  fmt_number(
+    columns=2:4,
+    decimals=4,
+  )|>
+  tab_source_note(
+    source_note="Data based on internal consistency reliability measures"
+  ) |>
+  cols_label(
+    Item= "Sub-Scale",
+    Cronbach_Alpha="Cronbach Alpha",
+    Avg_Inter_Item_Correlation= "Average Inter-Item Corr",
+    Standardized_Alpha = "Std.Alpha"
+  )
+
+
+print(rel_table)  
+
+#saving gt table
+
+gtsave(rel_table, filename="Reliability Measures.docx")
+
+#--------------------------------------
+
+#EFA analysis
+
+#removing items with similar wording and high correlations computed previously
+data <- data |> select(!c(ASE3, ASE5, ASE7, ASE9, ASE11, ASE13, ASE15, ASE17, ASE18, ASE20, AAI11, AAI12, AA11, AA12))
+
+#correlation matrix
+corr<- cor(data)
+
+#factorability analysis
+factor <- FACTORABILITY(corr)
+
+#kaiser-meyer-olkin test
+kmo <- KMO(corr)
+kmotable <- data.frame(
+  Item=c("AA1",   "AA2",   "AA3",   "AA4",   "AA5",   "AA6",   "AA7",   "AA8",   "AA9",  "AA10",  "AA13",  "ASE1",  "ASE2",  "ASE4",  "ASE6","ASE8" ,"ASE10", "ASE12", "ASE14" ,"ASE16", "ASE19", "ASE21", "ASE22",  "AAI1",  "AAI2",  "AAI3" , "AAI4",  "AAI5"  ,"AAI6",  "AAI7", "AAI8",  "AAI9", "AAI10",  "ITU1",  "ITU2",  "ITU3",  "ITU4",  "ITU5",  "ITU6",  "ITU7",  "ITU8" , "ITU9", "ITU10", "ITU11", "ITU12"  ),
+  Value=c(0.824, 0.808, 0.754, 0.830, 0.854, 0.656, 0.816, 0.748, 0.732, 0.848, 0.806, 0.789, 0.755, 0.808, 0.829,0.877, 0.899, 0.855, 0.761, 0.869, 0.772, 0.809, 0.692, 0.891, 0.781, 0.874, 0.735, 0.754, 0.898, 0.680,0.911, 0.928, 0.784, 0.884, 0.922, 0.924, 0.917, 0.929, 0.870, 0.887, 0.833, 0.805, 0.724, 0.725, 0.881)
+)
+
+KMOtable <- kmotable |>
+  gt() |>
+  tab_header(
+    title = "KMO Values"
+  ) |>
+  fmt_number(
+    decimals=4,
+  )
+gtsave(KMOtable, filename="KMOtable.docx")
+
+print(kmo)
+
+#Bartlett's test for spehericity
+bart <- bart_spher(corr)
+
+#computing eigen values
+eigenvalue <- eigen(corr)
+
+
+#coefficient of determination of correlation matrix
+dtm <- det(corr)
+print(dtm)
+
+#-----------------
+
+
+#Factor extraction using screeplot
+eigenvalue <- eigen(corr)$values
+View(eigenvalue)
+print(eigenvalue)
+#scree plot
+screeplot<- plot(eigenvalue, type="b",xlab="Component Number", ylab="eigenvalue", main="screeplot" )
+abline(h=1, col="red", lty=2)
+
+#saving screeplot to local device
+png(filename="screeplot.png", width=600, height=400, units="px", bg="white", res=300, family="sans")
+dev.off()
+
+#extracting number of factors for EFA analysis
+
+#factor extraction using parallel analysis, MAP, EPKMC
+fa_analysis<-RAWPAR(data, factormodel="PCA", Ndatasets=1000, percentile=95) #method 1
+RAWPAR(data, factormodel="PAF", Ndatasets=1000, percentile=95) #method 2
+MAP(data) #method 3
+
+
+write.csv(fa_analysis, "fa_analysis.csv")
+EMPKC(data) #method 4
+
+#saving parallel analysis results in a table
+fa_analysis <- as.data.frame(fa_analysis)
+fa_analysis_table <- flextable(fa_analysis) |>
+  colformat_double(digits=4) |> # format nos to 4 decimal places
+  theme_apa() |> # apply clean theme
+  autofit()
+
+save_as_docx(fa_analysis_table, path="fa_analysis.docx")
+View(fa_analysis_table)
+
+
+#EFA Analysis
+
+data1 <- EFA(corr,corkind="pearson", n_factors=5, rotation="promax", method="PAF")
+EFA(corr,corkind="pearson", n_factors=5, rotation="promax", method="PAF")
+print(data1)
+
+
+print(data1)
+
+#to extract uniqueness use 1-h2
+unique <- 1-data1$h2
+efadata1<- cbind(data1$rot_loadings, data1$h2, unique)
+rotated <- as.data.frame(unclass(efadata1))
+write.csv(rotated, "efaresults.csv")
+print(rotated)
+
+varaccount<- write.csv(data1$vars_accounted, "varaccount4.csv")
+interitemcor <- write.csv(data1$Phi, "factorintercorrelations.csv")
+
+#running ESEM
+
+
+#running ESEM
+
+esem.model <- '
+#outcome variables
+#EFA
+
+ efa("efa1")*Algo_Aware=~AA1+AA2+AA4+AA5+AA8
+ efa("efa1")*AI_Self_Efficacy=~ASE1+ASE2+ASE4+ASE6
+ 
+#outcome
+
+ Attitude_Shaped_Intention=~ ASE10+AAI1+AAI8+AAI9+ITU1+ITU2+ITU4+ITU5+ITU7
+ 
+#regression path
+ Attitude_Shaped_Intention ~ Algo_Aware +AI_Self_Efficacy  
+ '
+
+model_fit_esem3 <- sem(esem.model3, data=data,  rotation="oblimin")
+
+install.packages("ESEM")
+library(esem)
+
+summary(model_fit_esem3,
+        fit.measures=T,
+        standardized=T)
+
+
+
+#Creating a SEM Plot
+
+
+p<- semPlot::semPaths(
+  model_fit_esem3,
+  whatLabels="std",
+  style="ram",
+  layout="tree",
+  rotation=2,
+  cut=0.7,
+  fade=TRUE,
+  edge.label.cex=0.9,
+  sizeMan=3.75,
+  sizeLat=6,
+  color=list(lat="skyblue", man="black"),
+  edge.color="darkblue",
+  edge.label.position=0.5,
+  nCharNodes=1,
+  residuals=TRUE,
+  intercepts=TRUE,
+  optimizeLatRes=TRUE,
+  esize=1,
+  mar=c(6,12,6,12)
+)
+
+
+
+library(semptools)
+
+#improving and adding details to SEM Plot
+
+p2 <- mark_sig(p, model_fit_esem3)
+plot(p2)
+
+#set significant levels
+p3 <- mark_sig(p2,model_fit_esem3, alpha=c("(n.s)" =1.00, "*"=.05))
+
+plot(p3)
+
+#indicate standard errors
+p4 <- mark_se(p2, model_fit_esem3)
+plot(p4)
+
+
+#rotate residuals
+rotate_reside <- c(Algo_Aware=45,
+                   AI_Self_Efficacy =-45,
+                   Attitude_Shaped_Intention=-90)
+p5 <- rotate_resid(p3, rotate_reside)
+plot(p5)
+
+pdf("semplot.pdf", width=8, height=6, bg="grey")
+plot(p2)
+dev.off()
+
+
+jpeg("semplot.jpeg", width=480, height=500, units="px", quality=75, bg="white", res=600)
+plot(p6)
+dev.off()
+
+
+
+
+#extracting fit indices from SEM results
+
+fit_indices <- fitmeasures(model_fit_esem3)
+fit_indices_df<- as.data.frame(as.list(fit_indices))
+
+select_fit_indices_df<- fit_indices_df|>
+  select(c(cfi, tli, rmsea, rmsea.ci.lower, rmsea.ci.upper, srmr ))
+
+View(select_fit_indices_df)
+
+#transpose for better viewing
+View(t(fit_indices_df))
+
+
+
+
+#using lavaan GUI for graphics for the plot
+plot_lavaan(p)
+
+
+#further results publication commands
+
+#https://modelsummary.com/vignettes/get_started.html
+#using modelsummary function to extract results
+
+
+library(modelsummary)
+datasummary_skim(data)
+datasummary_correlation(data, output="correlation_table.html")
+datasummary_correlation(data, output="correlation_table.docx")
+
+
+fit_measures <- as.data.frame(model_fit_esem3)
+datasummary_df(fit_indices_df)
+
+##############
+#use LavaanExtra package to extract results in publication format
+install.packages("lavaanExtra")
+install.packages()
+library(lavaanExtra)
+install.packages("flextable")
+library(flextable)
+install.packages("officer")
+library(officer)
+fitindice<- nice_fit(model_fit_esem3, nice_table=TRUE)
+
+nice_modindices(model_fit_esem3, labels=NULL, method="lcs", sort=T)
+
+fitindice <- nice_fit(model=list(model_fit_esem3), include=c("cfi", "tli", "rmsea", "rmsea.ci.lower", "rmsea.ci.lower"),nice_table=T)
+reg_results <- lavaan_reg(model_fit_esem3, nice_table=T)
+print(reg_results)
+
+save_as_docx(reg_results, path="regresults.docx")
+save_as_docx(fitindice, path="fitindice.docx")
+
+#extracting factor loadings/regression scores of items on latent variables
+
+results <- standardizedSolution(model_fit_esem3, se=TRUE, zstat=TRUE, pvalue=TRUE, ci=TRUE, level=0.05)
+head(results)
+#filtering factor loadings amongst the results
+loadings_df<- subset(results, op=="=~")
+#selecting relevant columns
+publication_df <- loadings_df[c("lhs", "op", "rhs", "est.std", "se","z","pvalue")]
+#rename columns for clarity
+names(publication_df)<- c("Latent Variable", "op", "Item","Estimate_Std", "Standardized_Error", "Zvalue", "Pvalue")
+print(publication_df)
+
+
+#final publication format for factor loadings
+loadingtable <- flextable(publication_df) |>
+  colformat_double(digits=4) |> # format nos to 4 decimal places
+  theme_box() |> # apply clean theme
+  autofit() #adjust column width
+print(loadingtable)
+save_as_docx(a, path="loadingstable.docx")
+a<- theme_apa(loadingtable)
+print(a)
+
+#further refining publication tables
+# Refine the table using a pipeline (%>%)
+refined_loadings_table <- loadingtable %>%
+  # Rename columns for APA style (e.g., 'Estimate' usually means standardized estimate here)
+  set_header_labels(
+    Term = "Item",
+    Estimate_Std = "Std. Estimate (β)",
+    Standardized_Error = "SE",
+    conf.low = "95% CI Lower",
+    conf.high = "95% CI Upper",
+    Pvalue = "p"
+  ) %>%
+  # Format all numeric columns to 3 decimal places
+  colformat_double(digits = 3) %>%
+  # Add a formal table caption/title
+  add_header_lines(values = "Table 1. Standardized Factor Loadings for ESEM Model") %>%
+  # Ensure optimal column widths
+  autofit() %>%
+  # Apply a clean, simple theme (e.g., theme_apa() if you install the 'flextable' dev version, or just theme_box())
+  theme_apa()
+
+print(refined_loadings_table)
+save_as_docx(refined_loadings_table,path="refinedloadingstable.docx")
+#==================
+
+#variances for items extraction publication quality
+variance_results <- standardizedSolution(
+  model_fit_esem3, se=TRUE, zstat=TRUE, pvalue=TRUE, ci=TRUE)
+
+#filter for items with lhs = rhs
+variance_df <- subset(variance_results, op == "~~" & lhs==rhs)
+#std.level represents 'residual variance' or unexplained variance
+
+head(variance_df)
+
+#selecting relevant columns
+publication_df_var <- variance_df[c("lhs", "op", "rhs", "est.std", "se","pvalue")]
+#rename columns for clarity
+names(publication_df_var)<- c("lhs", "op", "rhs","Estimate_Std", "Standardized_Error", "Zvalue", "Pvalue")
+print(publication_df_var)
+
+#final publication format for variance scores
+vartable <- flextable(publication_df_var) |>
+  colformat_double(digits=4) |> # format nos to 4 decimal places
+  theme_box() |> # apply clean theme
+  autofit() #adjust column width
+print(vartable)
+save_as_docx(b, path="variancetable.docx")
+b<- theme_apa(vartable)
+print(b)
